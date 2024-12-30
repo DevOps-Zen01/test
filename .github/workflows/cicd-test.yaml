@@ -14,7 +14,7 @@ permissions:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/go-hello
-  HELM_REPO: your-username/helm-charts # แก้เป็น repo ของคุณ
+  HELM_REPO: DevOps-Zen01/helm-test
   PROJECT_ID: test1-403420
   GKE_ZONE: asia-southeast1
 
@@ -139,7 +139,7 @@ jobs:
       run: |
         cd helm-charts
         git add .
-        git commit -m "chore: update image tag to ${{ needs.build-and-push.outputs.image_tag }} [skip ci]"
+        git commit -m "chore: update image tag to ${{ needs.build-and-push.outputs.image_tag }}"
         git push origin main
 
   deploy:
