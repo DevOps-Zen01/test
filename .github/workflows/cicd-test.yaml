@@ -14,7 +14,10 @@ permissions:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/go-hello
-  
+  HELM_REPO: your-username/helm-charts # แก้เป็น repo ของคุณ
+  PROJECT_ID: test1-403420
+  GKE_ZONE: asia-southeast1
+
 jobs:
   test:
     name: Test Application
@@ -100,35 +103,86 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
 
-  deploy:
-    name: Deploy to GKE
+  update-helm:
+    name: Update Helm Chart
     needs: [build-and-push, security-scan]
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout Helm repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.HELM_REPO }}
+        token: ${{ secrets.HELM_REPO_TOKEN }}
+        ref: main
+        path: helm-charts
+
+    - name: Update Helm values
+      run: |
+        cd helm-charts
+        # Update image tag
+        yq e ".image.tag = \"${{ needs.build-and-push.outputs.image_tag }}\"" -i values.yaml
+        yq e ".image.repository = \"${{ env.IMAGE_NAME }}\"" -i values.yaml
+        
+        # Update chart version
+        CHART_VERSION=$(yq e '.version' Chart.yaml)
+        NEW_VERSION=$(echo $CHART_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+        yq e ".version = \"$NEW_VERSION\"" -i Chart.yaml
+
+    - name: Configure Git
+      run: |
+        cd helm-charts
+        git config --local user.name 'github-actions[bot]'
+        git config --local user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Commit and push changes
+      run: |
+        cd helm-charts
+        git add .
+        git commit -m "chore: update image tag to ${{ needs.build-and-push.outputs.image_tag }} [skip ci]"
+        git push origin main
+
+  deploy:
+    name: Deploy to GKE
+    needs: [update-helm, build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Helm repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.HELM_REPO }}
+        token: ${{ secrets.HELM_REPO_TOKEN }}
+        ref: main
+        path: helm-charts
 
     - name: Setup GCloud CLI
-      uses: google-github-actions/setup-gcloud@v0
+      uses: google-github-actions/setup-gcloud@v1
       with:
         service_account_key: ${{ secrets.GKE_SA_KEY }}
-        project_id: ${{ secrets.GKE_PROJECT }}
+        project_id: ${{ env.PROJECT_ID }}
 
     - name: Get GKE Credentials
-      uses: google-github-actions/get-gke-credentials@v0
+      uses: google-github-actions/get-gke-credentials@v1
       with:
         cluster_name: ${{ secrets.GKE_CLUSTER }}
-        location: ${{ secrets.GKE_ZONE }}
+        location: ${{ env.GKE_ZONE }}
+        credentials: ${{ secrets.GKE_SA_KEY }}
 
-    # Update kubernetes manifests
-    - name: Update kustomize
-      run: |
-        cd k8s/overlays/production
-        kustomize edit set image ${{ env.IMAGE_NAME }}=${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.12.0
 
-    - name: Deploy to GKE
+    - name: Deploy with Helm
       run: |
-        kubectl apply -k ./k8s/overlays/production
+        cd helm-charts
+        helm upgrade --install go-hello . \
+          --namespace test \
+          --create-namespace \
+          --wait \
+          --timeout 5m \
+          --set image.tag=${{ needs.build-and-push.outputs.image_tag }}
 
     - name: Verify deployment
       run: |
-        kubectl rollout status deployment/go-hello -n production
+        kubectl rollout status deployment/go-hello -n test
