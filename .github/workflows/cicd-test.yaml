@@ -149,13 +149,12 @@ jobs:
     
     - name: Get GKE Credentials
       uses: google-github-actions/get-gke-credentials@v1
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GKE_SA_KEY }}
       with:
         cluster_name: ${{ secrets.GKE_CLUSTER }}
         location: ${{ env.GKE_ZONE }}
         project_id: ${{ env.PROJECT_ID }}
-        use_auth_provider: false
-        use_internal_ip: false
-        use_connect_gateway: false
         
     - name: Install Helm
       uses: azure/setup-helm@v3
