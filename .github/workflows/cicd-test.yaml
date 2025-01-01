@@ -167,11 +167,12 @@ jobs:
     - name: Deploy with Helm
       run: |
         cd basechart
-        helm upgrade --install go-hello . \
+        helm upgrade go-hello ./chart . \
+          --install \
           --namespace test \
           --create-namespace \
           --wait \
-          --timeout 10m \  # เพิ่มเวลา timeout
+          --timeout 10m \
           --set image.tag=${{ needs.build-and-push.outputs.image_tag }}
 
     - name: Verify deployment
