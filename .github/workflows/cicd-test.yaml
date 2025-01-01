@@ -159,22 +159,3 @@ jobs:
         location: ${{ env.GKE_ZONE }}
         project_id: ${{ env.PROJECT_ID }}
         
-    - name: Install Helm
-      uses: azure/setup-helm@v3
-      with:
-        version: v3.12.0
-
-    - name: Deploy with Helm
-      run: |
-        cd basechart
-        helm upgrade go-hello ./chart . \
-          --install \
-          --namespace test \
-          --create-namespace \
-          --wait \
-          --timeout 10m \
-          --set image.tag=${{ needs.build-and-push.outputs.image_tag }}
-
-    - name: Verify deployment
-      run: |
-        kubectl rollout status deployment/go-hello -n test
