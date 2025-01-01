@@ -153,7 +153,9 @@ jobs:
         cluster_name: ${{ secrets.GKE_CLUSTER }}
         location: ${{ env.GKE_ZONE }}
         project_id: ${{ env.PROJECT_ID }}
-        credentials: ${{ secrets.GKE_SA_KEY }}
+        use_auth_provider: false
+        use_internal_ip: false
+        use_connect_gateway: false
         
     - name: Install Helm
       uses: azure/setup-helm@v3
